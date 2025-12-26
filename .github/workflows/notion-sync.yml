@@ -71,7 +71,7 @@ jobs:
           (async () => {
             const mdBlocks = await n2m.pageToMarkdown(pageId);
             const md = n2m.toMarkdownString(mdBlocks).parent || "";
-            fs.writeFileSync(path.join(outDir, "learning-hub.md"), md, "utf8");
+            fs.writeFileSync(path.join(outDir, "meeting-notes.md"), md, "utf8");
             console.log("✅ Exported: notion/learning-hub.md");
           })().catch((e) => {
             console.error(e?.body || e);
