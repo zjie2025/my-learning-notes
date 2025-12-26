@@ -25,7 +25,7 @@ jobs:
           npm init -y
           npm i @notionhq/client notion-to-md
 
-      - name: Export Notion page to Markdown
+            - name: Export Notion page to Markdown
         env:
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
           NOTION_PAGE_ID: ${{ secrets.NOTION_PAGE_ID }}
@@ -36,20 +36,53 @@ jobs:
           const { Client } = require("@notionhq/client");
           const { NotionToMarkdown } = require("notion-to-md");
 
-          const notion = new Client({ auth: process.env.NOTION_TOKEN });
+          function sanitizePageId(input) {
+            let s = (input || "").trim();
+
+            // 如果你不小心粘了整段 URL，只取最后一段
+            // e.g. https://www.notion.so/.../My-Page-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+            s = s.split("?")[0].split("#")[0];
+            if (s.includes("/")) s = s.split("/").pop();
+
+            // 去掉任何像 /children 之类的尾巴
+            s = s.replace(/\/.*/g, "");
+
+            // 只保留 0-9a-f 和短横线（Notion ID 常见格式）
+            s = s.replace(/[^0-9a-fA-F-]/g, "");
+
+            // 去掉短横线，得到 32 位
+            s = s.replace(/-/g, "").toLowerCase();
+
+            return s;
+          }
+
+          const token = process.env.NOTION_TOKEN;
+          const raw = process.env.NOTION_PAGE_ID;
+          const pageId = sanitizePageId(raw);
+
+          if (!token) { console.error("Missing NOTION_TOKEN"); process.exit(1); }
+          if (!pageId || pageId.length !== 32) {
+            console.error("NOTION_PAGE_ID looks wrong.");
+            console.error("Raw:", raw);
+            console.error("Sanitized:", pageId);
+            process.exit(1);
+          }
+
+          const notion = new Client({ auth: token });
           const n2m = new NotionToMarkdown({ notionClient: notion });
 
           const outDir = path.join(process.cwd(), "notion");
           fs.mkdirSync(outDir, { recursive: true });
 
           (async () => {
-            const pageId = process.env.NOTION_PAGE_ID;
             const mdBlocks = await n2m.pageToMarkdown(pageId);
-            const md = n2m.toMarkdownString(mdBlocks).parent;
-
+            const md = n2m.toMarkdownString(mdBlocks).parent || "";
             fs.writeFileSync(path.join(outDir, "learning-hub.md"), md, "utf8");
             console.log("✅ Exported: notion/learning-hub.md");
-          })().catch((e) => { console.error(e); process.exit(1); });
+          })().catch((e) => {
+            console.error(e?.body || e);
+            process.exit(1);
+          });
           NODE
 
       - name: Commit and push (if changed)
